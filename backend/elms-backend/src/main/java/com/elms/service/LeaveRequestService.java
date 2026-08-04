@@ -2,8 +2,21 @@ package com.elms.service;
 
 import com.elms.dto.LeaveApprovalRequest;
 import com.elms.dto.LeaveRejectionRequest;
-import com.elms.entity.*;
-import com.elms.repository.*;
+import com.elms.entity.Employee;
+import com.elms.entity.LeaveBalance;
+import com.elms.entity.LeaveRequest;
+import com.elms.entity.LeaveRequestStatus;
+import com.elms.entity.LeaveType;
+import com.elms.entity.NotificationType;
+import com.elms.entity.Role;
+import com.elms.entity.User;
+import com.elms.repository.EmployeeRepository;
+import com.elms.repository.HolidayRepository;
+import com.elms.repository.LeaveBalanceRepository;
+import com.elms.repository.LeaveRequestRepository;
+import com.elms.repository.LeaveTypeRepository;
+import com.elms.repository.UserRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -13,6 +26,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class LeaveRequestService {
@@ -43,38 +58,55 @@ public class LeaveRequestService {
         this.notificationService = notificationService;
     }
 
-    public List<LeaveRequest> getLeaveRequestsByEmployee(Long employeeId) {
-        Employee employee = employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new RuntimeException("Employee not found with id: " + employeeId));
+    public List<LeaveRequest> getLeaveRequestsByEmployee(Long employeeId, String authenticatedEmail) {
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        Employee employee = getEmployee(employeeId);
+        ensureCanViewEmployeeRequests(authenticatedUser, employee);
         return leaveRequestRepository.findByEmployeeOrderByCreatedAtDesc(employee);
     }
 
-    public LeaveRequest getLeaveRequestById(Long id) {
-        return leaveRequestRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Leave request not found with id: " + id));
+    public LeaveRequest getLeaveRequestById(Long id, String authenticatedEmail) {
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        LeaveRequest leaveRequest = findLeaveRequestById(id);
+        ensureCanViewEmployeeRequests(authenticatedUser, leaveRequest.getEmployee());
+        return leaveRequest;
     }
 
-    public List<LeaveRequest> getLeaveRequestsByManager(Long managerId, String authenticatedEmail, boolean isHr) {
-        if (!isHr) {
-            Employee authenticatedManager = getEmployeeForAuthenticatedUser(authenticatedEmail);
-            if (!managerId.equals(authenticatedManager.getId())) {
-                throw new org.springframework.security.access.AccessDeniedException(
-                        "Managers can only view leave requests for their own team"
-                );
-            }
+    public List<LeaveRequest> getLeaveRequestsByManager(Long managerId, String authenticatedEmail) {
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        if (authenticatedUser.getRole() == Role.HR) {
+            return leaveRequestRepository.findByEmployeeManagerIdOrderByCreatedAtDesc(managerId);
         }
 
+        if (authenticatedUser.getRole() != Role.MANAGER) {
+            throw new AccessDeniedException("Only managers and HR can view team leave requests");
+        }
+
+        Employee authenticatedManager = getEmployeeForAuthenticatedUser(authenticatedUser);
+        if (!managerId.equals(authenticatedManager.getId())) {
+            throw new AccessDeniedException("Managers can only view leave requests for their own team");
+        }
         return leaveRequestRepository.findByEmployeeManagerIdOrderByCreatedAtDesc(managerId);
     }
 
     @Transactional
-    public LeaveRequest createLeaveRequest(LeaveRequest leaveRequest) {
+    public LeaveRequest createLeaveRequest(LeaveRequest leaveRequest, String authenticatedEmail) {
         validateRequest(leaveRequest);
 
-        Employee employee = employeeRepository.findById(leaveRequest.getEmployee().getId())
-                .orElseThrow(() -> new RuntimeException("Employee not found with id: " + leaveRequest.getEmployee().getId()));
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        Employee employee = getEmployee(leaveRequest.getEmployee().getId());
+        if (authenticatedUser.getRole() == Role.EMPLOYEE) {
+            Employee authenticatedEmployee = getEmployeeForAuthenticatedUser(authenticatedUser);
+            if (!authenticatedEmployee.getId().equals(employee.getId())) {
+                throw new AccessDeniedException("Employees can only create leave requests for themselves");
+            }
+        }
+
         LeaveType leaveType = leaveTypeRepository.findById(leaveRequest.getLeaveType().getId())
                 .orElseThrow(() -> new RuntimeException("Leave type not found with id: " + leaveRequest.getLeaveType().getId()));
+        if (!Boolean.TRUE.equals(leaveType.getActive())) {
+            throw new RuntimeException("Leave type is inactive and cannot be used for new leave requests.");
+        }
 
         leaveRequest.setEmployee(employee);
         leaveRequest.setLeaveType(leaveType);
@@ -89,33 +121,41 @@ public class LeaveRequestService {
         validateNoOverlap(employee, leaveRequest.getStartDate(), leaveRequest.getEndDate());
 
         if (Boolean.TRUE.equals(leaveType.getApprovalRequired())) {
-            leaveRequest.setStatus(LeaveRequestStatus.PENDING);
             if (employee.getManager() == null) {
                 throw new RuntimeException("Manager assignment is required for this leave type");
             }
+            leaveRequest.setStatus(LeaveRequestStatus.PENDING);
         } else {
             leaveRequest.setStatus(LeaveRequestStatus.AUTO_APPROVED);
         }
 
-        leaveRequest.setCreatedAt(LocalDateTime.now());
-        leaveRequest.setUpdatedAt(LocalDateTime.now());
-
+        LocalDateTime now = LocalDateTime.now();
+        leaveRequest.setCreatedAt(now);
+        leaveRequest.setUpdatedAt(now);
         LeaveRequest savedRequest = leaveRequestRepository.save(leaveRequest);
 
         if (savedRequest.getStatus() == LeaveRequestStatus.AUTO_APPROVED) {
-            updateBalanceForAutoApproved(savedRequest);
-            notifySickLeaveAutoApproved(savedRequest);
-        } else if (savedRequest.getStatus() == LeaveRequestStatus.PENDING) {
+            updateBalance(savedRequest);
+            notifyManagerOfAutoApprovedLeave(savedRequest);
+        } else {
             notifyManagerOfPendingLeave(savedRequest);
         }
-
         return savedRequest;
     }
 
     @Transactional
-    public LeaveRequest cancelLeaveRequest(Long id) {
-        LeaveRequest leaveRequest = getLeaveRequestById(id);
+    public LeaveRequest cancelLeaveRequest(Long id, String authenticatedEmail) {
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        LeaveRequest leaveRequest = findLeaveRequestById(id);
 
+        if (authenticatedUser.getRole() == Role.HR) {
+            throw new AccessDeniedException("HR cannot cancel employee leave requests through this endpoint");
+        }
+
+        Employee authenticatedEmployee = getEmployeeForAuthenticatedUser(authenticatedUser);
+        if (!authenticatedEmployee.getId().equals(leaveRequest.getEmployee().getId())) {
+            throw new AccessDeniedException("Only the employee who owns this leave request can cancel it");
+        }
         if (leaveRequest.getStatus() != LeaveRequestStatus.PENDING) {
             throw new RuntimeException("Only PENDING leave requests can be cancelled");
         }
@@ -123,7 +163,7 @@ public class LeaveRequestService {
         leaveRequest.setStatus(LeaveRequestStatus.CANCELLED);
         leaveRequest.setUpdatedAt(LocalDateTime.now());
         LeaveRequest savedRequest = leaveRequestRepository.save(leaveRequest);
-        notifyCancellation(savedRequest);
+        notifyManagerOfCancellation(savedRequest);
         return savedRequest;
     }
 
@@ -131,24 +171,20 @@ public class LeaveRequestService {
     public LeaveRequest approveLeaveRequest(
             Long id,
             LeaveApprovalRequest request,
-            String authenticatedEmail,
-            boolean isHr
+            String authenticatedEmail
     ) {
-        LeaveRequest leaveRequest = getLeaveRequestById(id);
-
-        validateManagerReviewEligibility(leaveRequest, request.getManagerId(), true);
-        validateAuthenticatedReviewer(authenticatedEmail, isHr, request.getManagerId());
-
-        Employee manager = employeeRepository.findById(request.getManagerId())
-                .orElseThrow(() -> new RuntimeException("Manager not found with id: " + request.getManagerId()));
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        LeaveRequest leaveRequest = findLeaveRequestById(id);
+        validateReviewEligibility(leaveRequest, authenticatedUser, true);
+        validateBalance(leaveRequest.getEmployee(), leaveRequest.getLeaveType(), leaveRequest.getLeaveDays());
 
         leaveRequest.setStatus(LeaveRequestStatus.APPROVED);
-        leaveRequest.setReviewedBy(manager);
+        leaveRequest.setReviewedBy(authenticatedUser);
         leaveRequest.setReviewedAt(LocalDateTime.now());
         leaveRequest.setUpdatedAt(LocalDateTime.now());
 
         LeaveRequest savedRequest = leaveRequestRepository.save(leaveRequest);
-        updateBalanceForApproved(savedRequest);
+        updateBalance(savedRequest);
         notifyApproval(savedRequest);
         return savedRequest;
     }
@@ -157,25 +193,20 @@ public class LeaveRequestService {
     public LeaveRequest rejectLeaveRequest(
             Long id,
             LeaveRejectionRequest request,
-            String authenticatedEmail,
-            boolean isHr
+            String authenticatedEmail
     ) {
-        LeaveRequest leaveRequest = getLeaveRequestById(id);
-
-        validateManagerReviewEligibility(leaveRequest, request.getManagerId(), false);
-        validateAuthenticatedReviewer(authenticatedEmail, isHr, request.getManagerId());
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        LeaveRequest leaveRequest = findLeaveRequestById(id);
+        validateReviewEligibility(leaveRequest, authenticatedUser, false);
 
         if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
             throw new RuntimeException("Rejection reason is required");
         }
 
-        Employee manager = employeeRepository.findById(request.getManagerId())
-                .orElseThrow(() -> new RuntimeException("Manager not found with id: " + request.getManagerId()));
-
         leaveRequest.setStatus(LeaveRequestStatus.REJECTED);
-        leaveRequest.setReviewedBy(manager);
+        leaveRequest.setReviewedBy(authenticatedUser);
         leaveRequest.setReviewedAt(LocalDateTime.now());
-        leaveRequest.setRejectionReason(request.getRejectionReason());
+        leaveRequest.setRejectionReason(request.getRejectionReason().trim());
         leaveRequest.setUpdatedAt(LocalDateTime.now());
 
         LeaveRequest savedRequest = leaveRequestRepository.save(leaveRequest);
@@ -183,50 +214,64 @@ public class LeaveRequestService {
         return savedRequest;
     }
 
-    private void validateManagerReviewEligibility(LeaveRequest leaveRequest, Long managerId, boolean isApproval) {
-        if (managerId == null) {
-            throw new RuntimeException("managerId is required");
-        }
-
-        if (leaveRequest.getStatus() != LeaveRequestStatus.PENDING) {
-            throw new RuntimeException("Only PENDING leave requests can be " + (isApproval ? "approved" : "rejected"));
-        }
-
-        if (leaveRequest.getLeaveType() != null && !Boolean.TRUE.equals(leaveRequest.getLeaveType().getApprovalRequired())) {
-            throw new RuntimeException("Sick Leave requests cannot be approved or rejected by a manager");
-        }
-
-        Employee employee = leaveRequest.getEmployee();
-        if (employee == null || employee.getManager() == null) {
-            throw new RuntimeException("The employee does not have an assigned manager");
-        }
-
-        if (!managerId.equals(employee.getManager().getId())) {
-            throw new RuntimeException("The provided manager is not assigned to this employee");
-        }
-    }
-
-    private void validateAuthenticatedReviewer(String authenticatedEmail, boolean isHr, Long managerId) {
-        if (isHr) {
+    private void ensureCanViewEmployeeRequests(User authenticatedUser, Employee targetEmployee) {
+        if (authenticatedUser.getRole() == Role.HR) {
             return;
         }
 
-        Employee authenticatedManager = getEmployeeForAuthenticatedUser(authenticatedEmail);
-        if (!managerId.equals(authenticatedManager.getId())) {
-            throw new org.springframework.security.access.AccessDeniedException(
-                    "Managers can only review leave requests for their own team"
-            );
+        Employee authenticatedEmployee = getEmployeeForAuthenticatedUser(authenticatedUser);
+        if (authenticatedUser.getRole() == Role.EMPLOYEE
+                && authenticatedEmployee.getId().equals(targetEmployee.getId())) {
+            return;
+        }
+        if (authenticatedUser.getRole() == Role.MANAGER
+                && targetEmployee.getManager() != null
+                && authenticatedEmployee.getId().equals(targetEmployee.getManager().getId())) {
+            return;
+        }
+        throw new AccessDeniedException("You are not authorized to view these leave requests");
+    }
+
+    private void validateReviewEligibility(LeaveRequest leaveRequest, User authenticatedUser, boolean isApproval) {
+        if (leaveRequest.getStatus() != LeaveRequestStatus.PENDING) {
+            throw new RuntimeException("Only PENDING leave requests can be " + (isApproval ? "approved" : "rejected"));
+        }
+        if (!Boolean.TRUE.equals(leaveRequest.getLeaveType().getApprovalRequired())) {
+            throw new RuntimeException("Only approval-required leave requests can be manually approved or rejected");
+        }
+        if (authenticatedUser.getRole() == Role.HR) {
+            return;
+        }
+        if (authenticatedUser.getRole() != Role.MANAGER) {
+            throw new AccessDeniedException("Only managers and HR can review leave requests");
+        }
+
+        Employee authenticatedManager = getEmployeeForAuthenticatedUser(authenticatedUser);
+        Employee requestEmployee = leaveRequest.getEmployee();
+        if (requestEmployee.getManager() == null
+                || !authenticatedManager.getId().equals(requestEmployee.getManager().getId())) {
+            throw new AccessDeniedException("Managers can only review leave requests for their direct reports");
         }
     }
 
-    private Employee getEmployeeForAuthenticatedUser(String authenticatedEmail) {
-        User user = userRepository.findByEmail(authenticatedEmail)
-                .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("Authenticated user not found"));
+    private User getAuthenticatedUser(String authenticatedEmail) {
+        return userRepository.findByEmail(authenticatedEmail)
+                .orElseThrow(() -> new AccessDeniedException("Authenticated user not found"));
+    }
 
+    private Employee getEmployeeForAuthenticatedUser(User user) {
         return employeeRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException(
-                        "Authenticated user is not linked to an employee record"
-                ));
+                .orElseThrow(() -> new AccessDeniedException("Authenticated employee not found"));
+    }
+
+    private Employee getEmployee(Long employeeId) {
+        return employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new RuntimeException("Employee not found with id: " + employeeId));
+    }
+
+    private LeaveRequest findLeaveRequestById(Long id) {
+        return leaveRequestRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Leave request not found with id: " + id));
     }
 
     private void validateRequest(LeaveRequest leaveRequest) {
@@ -251,13 +296,15 @@ public class LeaveRequestService {
     }
 
     private BigDecimal calculateWorkingDays(LocalDate startDate, LocalDate endDate) {
+        Set<LocalDate> holidayDates = holidayRepository.findByHolidayDateBetween(startDate, endDate).stream()
+                .map(holiday -> holiday.getHolidayDate())
+                .collect(Collectors.toSet());
+
         BigDecimal workingDays = BigDecimal.ZERO;
-        LocalDate current = startDate;
-        while (!current.isAfter(endDate)) {
-            if (!isWeekend(current) && !isHoliday(current)) {
+        for (LocalDate current = startDate; !current.isAfter(endDate); current = current.plusDays(1)) {
+            if (!isWeekend(current) && !holidayDates.contains(current)) {
                 workingDays = workingDays.add(BigDecimal.ONE);
             }
-            current = current.plusDays(1);
         }
         return workingDays;
     }
@@ -267,22 +314,26 @@ public class LeaveRequestService {
         return day == DayOfWeek.SATURDAY || day == DayOfWeek.SUNDAY;
     }
 
-    private boolean isHoliday(LocalDate date) {
-        return holidayRepository.findByHolidayDateBetween(date, date).size() > 0;
-    }
-
     private void validateBalance(Employee employee, LeaveType leaveType, BigDecimal requestedDays) {
-        if (!Boolean.TRUE.equals(leaveType.getApprovalRequired())) {
+        if (!Boolean.TRUE.equals(leaveType.getApprovalRequired()) || isLossOfPay(leaveType)) {
             return;
         }
 
-        LeaveBalance balance = leaveBalanceRepository.findByEmployeeAndLeaveType(employee, leaveType)
-                .orElseThrow(() -> new RuntimeException("Leave balance not found for employee and leave type"));
-
-        BigDecimal remainingDays = balance.getRemainingDays();
-        if (requestedDays.compareTo(remainingDays) > 0) {
+        LeaveBalance balance = getLeaveBalance(employee, leaveType);
+        if (requestedDays.compareTo(balance.getRemainingDays()) > 0) {
             throw new RuntimeException("Insufficient leave balance");
         }
+    }
+
+    private boolean isLossOfPay(LeaveType leaveType) {
+        return "Loss of Pay".equalsIgnoreCase(leaveType.getName())
+                && leaveType.getAllocatedDays() != null
+                && leaveType.getAllocatedDays().compareTo(BigDecimal.ZERO) == 0;
+    }
+
+    private LeaveBalance getLeaveBalance(Employee employee, LeaveType leaveType) {
+        return leaveBalanceRepository.findByEmployeeAndLeaveType(employee, leaveType)
+                .orElseThrow(() -> new RuntimeException("Leave balance not found for employee and leave type"));
     }
 
     private void validateNoOverlap(Employee employee, LocalDate startDate, LocalDate endDate) {
@@ -291,28 +342,32 @@ public class LeaveRequestService {
                 LeaveRequestStatus.APPROVED,
                 LeaveRequestStatus.AUTO_APPROVED
         );
-
-        List<LeaveRequest> overlappingRequests = leaveRequestRepository.findOverlappingRequests(employee, startDate, endDate, blockingStatuses);
-        if (!overlappingRequests.isEmpty()) {
+        if (!leaveRequestRepository.findOverlappingRequests(employee, startDate, endDate, blockingStatuses).isEmpty()) {
             throw new RuntimeException("Leave request overlaps with an existing request");
         }
     }
 
     private void notifyManagerOfPendingLeave(LeaveRequest leaveRequest) {
-        if (leaveRequest.getEmployee() == null || leaveRequest.getEmployee().getManager() == null) {
-            return;
+        if (leaveRequest.getEmployee().getManager() != null) {
+            notificationService.createNotification(
+                    leaveRequest.getEmployee().getManager().getUser(),
+                    NotificationType.LEAVE_SUBMITTED,
+                    leaveRequest.getEmployee().getName() + " submitted a leave request."
+            );
         }
-        notificationService.createNotification(
-                leaveRequest.getEmployee().getManager().getUser(),
-                NotificationType.LEAVE_SUBMITTED,
-                leaveRequest.getEmployee().getName() + " submitted a leave request."
-        );
+    }
+
+    private void notifyManagerOfCancellation(LeaveRequest leaveRequest) {
+        if (leaveRequest.getEmployee().getManager() != null) {
+            notificationService.createNotification(
+                    leaveRequest.getEmployee().getManager().getUser(),
+                    NotificationType.LEAVE_CANCELLED,
+                    leaveRequest.getEmployee().getName() + " cancelled their leave request."
+            );
+        }
     }
 
     private void notifyApproval(LeaveRequest leaveRequest) {
-        if (leaveRequest.getEmployee() == null || leaveRequest.getEmployee().getUser() == null) {
-            return;
-        }
         notificationService.createNotification(
                 leaveRequest.getEmployee().getUser(),
                 NotificationType.LEAVE_APPROVED,
@@ -321,13 +376,7 @@ public class LeaveRequestService {
     }
 
     private void notifyRejection(LeaveRequest leaveRequest) {
-        if (leaveRequest.getEmployee() == null || leaveRequest.getEmployee().getUser() == null) {
-            return;
-        }
-        String message = "Your leave request was rejected.";
-        if (leaveRequest.getRejectionReason() != null && !leaveRequest.getRejectionReason().trim().isEmpty()) {
-            message = "Your leave request was rejected. Reason: " + leaveRequest.getRejectionReason();
-        }
+        String message = "Your leave request was rejected. Reason: " + leaveRequest.getRejectionReason();
         notificationService.createNotification(
                 leaveRequest.getEmployee().getUser(),
                 NotificationType.LEAVE_REJECTED,
@@ -335,41 +384,19 @@ public class LeaveRequestService {
         );
     }
 
-    private void notifyCancellation(LeaveRequest leaveRequest) {
-        if (leaveRequest.getEmployee() == null || leaveRequest.getEmployee().getUser() == null) {
-            return;
+    private void notifyManagerOfAutoApprovedLeave(LeaveRequest leaveRequest) {
+        if (leaveRequest.getEmployee().getManager() != null) {
+            notificationService.createNotification(
+                    leaveRequest.getEmployee().getManager().getUser(),
+                    NotificationType.SICK_LEAVE_AUTO_APPROVED,
+                    leaveRequest.getEmployee().getName() + "'s " + leaveRequest.getLeaveType().getName()
+                            + " request was auto-approved."
+            );
         }
-        notificationService.createNotification(
-                leaveRequest.getEmployee().getUser(),
-                NotificationType.LEAVE_CANCELLED,
-                "Your leave request was cancelled."
-        );
     }
 
-    private void notifySickLeaveAutoApproved(LeaveRequest leaveRequest) {
-        if (leaveRequest.getEmployee() == null || leaveRequest.getEmployee().getManager() == null) {
-            return;
-        }
-        notificationService.createNotification(
-                leaveRequest.getEmployee().getManager().getUser(),
-                NotificationType.SICK_LEAVE_AUTO_APPROVED,
-                leaveRequest.getEmployee().getName() + "'s sick leave was auto-approved."
-        );
-    }
-
-    private void updateBalanceForAutoApproved(LeaveRequest leaveRequest) {
-        LeaveBalance balance = leaveBalanceRepository.findByEmployeeAndLeaveType(leaveRequest.getEmployee(), leaveRequest.getLeaveType())
-                .orElseThrow(() -> new RuntimeException("Leave balance not found for employee and leave type"));
-
-        balance.setUsedDays(balance.getUsedDays().add(leaveRequest.getLeaveDays()));
-        balance.setUpdatedAt(LocalDateTime.now());
-        leaveBalanceRepository.save(balance);
-    }
-
-    private void updateBalanceForApproved(LeaveRequest leaveRequest) {
-        LeaveBalance balance = leaveBalanceRepository.findByEmployeeAndLeaveType(leaveRequest.getEmployee(), leaveRequest.getLeaveType())
-                .orElseThrow(() -> new RuntimeException("Leave balance not found for employee and leave type"));
-
+    private void updateBalance(LeaveRequest leaveRequest) {
+        LeaveBalance balance = getLeaveBalance(leaveRequest.getEmployee(), leaveRequest.getLeaveType());
         balance.setUsedDays(balance.getUsedDays().add(leaveRequest.getLeaveDays()));
         balance.setUpdatedAt(LocalDateTime.now());
         leaveBalanceRepository.save(balance);

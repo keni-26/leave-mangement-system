@@ -4,8 +4,10 @@ import com.elms.entity.Employee;
 import com.elms.entity.Notification;
 import com.elms.entity.NotificationType;
 import com.elms.entity.User;
+import com.elms.dto.NotificationResponse;
 import com.elms.repository.NotificationRepository;
 import com.elms.repository.UserRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,28 +24,39 @@ public class NotificationService {
         this.userRepository = userRepository;
     }
 
-    public List<Notification> getNotificationsForUser(Long userId) {
-        User user = getUser(userId);
-        return notificationRepository.findByUserOrderByCreatedAtDesc(user);
+    public List<NotificationResponse> getNotificationsForUser(Long userId, String authenticatedEmail) {
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        ensureOwnUserId(authenticatedUser, userId);
+        return notificationRepository.findByUserOrderByCreatedAtDesc(authenticatedUser).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
-    public List<Notification> getUnreadNotificationsForUser(Long userId) {
-        User user = getUser(userId);
-        return notificationRepository.findByUserAndIsReadFalseOrderByCreatedAtDesc(user);
+    public List<NotificationResponse> getUnreadNotificationsForUser(Long userId, String authenticatedEmail) {
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        ensureOwnUserId(authenticatedUser, userId);
+        return notificationRepository.findByUserAndIsReadFalseOrderByCreatedAtDesc(authenticatedUser).stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     @Transactional
-    public Notification markNotificationAsRead(Long id) {
+    public NotificationResponse markNotificationAsRead(Long id, String authenticatedEmail) {
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
         Notification notification = notificationRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Notification not found with id: " + id));
+        if (!authenticatedUser.getId().equals(notification.getUser().getId())) {
+            throw new AccessDeniedException("You are not authorized to access this notification");
+        }
         notification.setIsRead(true);
-        return notificationRepository.save(notification);
+        return toResponse(notificationRepository.save(notification));
     }
 
     @Transactional
-    public void markAllNotificationsAsRead(Long userId) {
-        User user = getUser(userId);
-        List<Notification> notifications = notificationRepository.findByUserOrderByCreatedAtDesc(user);
+    public void markAllNotificationsAsRead(Long userId, String authenticatedEmail) {
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        ensureOwnUserId(authenticatedUser, userId);
+        List<Notification> notifications = notificationRepository.findByUserOrderByCreatedAtDesc(authenticatedUser);
         for (Notification notification : notifications) {
             if (!Boolean.TRUE.equals(notification.getIsRead())) {
                 notification.setIsRead(true);
@@ -74,8 +87,24 @@ public class NotificationService {
         createNotification(employee.getUser(), type, message);
     }
 
-    private User getUser(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
+    private User getAuthenticatedUser(String authenticatedEmail) {
+        return userRepository.findByEmail(authenticatedEmail)
+                .orElseThrow(() -> new AccessDeniedException("Authenticated user not found"));
+    }
+
+    private void ensureOwnUserId(User authenticatedUser, Long requestedUserId) {
+        if (!authenticatedUser.getId().equals(requestedUserId)) {
+            throw new AccessDeniedException("Users can only access their own notifications");
+        }
+    }
+
+    private NotificationResponse toResponse(Notification notification) {
+        NotificationResponse response = new NotificationResponse();
+        response.setId(notification.getId());
+        response.setMessage(notification.getMessage());
+        response.setType(notification.getType());
+        response.setIsRead(notification.getIsRead());
+        response.setCreatedAt(notification.getCreatedAt());
+        return response;
     }
 }

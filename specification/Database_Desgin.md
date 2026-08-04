@@ -352,7 +352,7 @@ Stores employee leave applications.
 | reason           | TEXT         | NOT NULL     | Leave reason               |
 | status           | VARCHAR(20)  | NOT NULL     | Current leave status       |
 | rejection_reason | TEXT         | NULL         | Reason for rejection       |
-| reviewed_by      | BIGINT       | NULL, FK     | Manager who reviewed       |
+| reviewed_by      | BIGINT       | NULL, FK     | Authenticated user who reviewed |
 | reviewed_at      | TIMESTAMP    | NULL         | Review time                |
 | created_at       | TIMESTAMP    | NOT NULL     | Request creation time      |
 | updated_at       | TIMESTAMP    | NOT NULL     | Last update time           |
@@ -362,7 +362,7 @@ Stores employee leave applications.
 ```text
 employee_id → employees.id
 leave_type_id → leave_types.id
-reviewed_by → employees.id
+reviewed_by → users.id
 ```
 
 ## Status Values

@@ -27,7 +27,10 @@ public class LeaveRequestController {
     }
 
     @PostMapping
-    public ResponseEntity<LeaveRequest> createLeaveRequest(@RequestBody LeaveRequestCreateRequest request) {
+    public ResponseEntity<LeaveRequest> createLeaveRequest(
+            @RequestBody LeaveRequestCreateRequest request,
+            Authentication authentication
+    ) {
         LeaveRequest leaveRequest = new LeaveRequest();
         Employee employee = new Employee();
         employee.setId(request.getEmployeeId());
@@ -41,13 +44,16 @@ public class LeaveRequestController {
         leaveRequest.setEndDate(request.getEndDate());
         leaveRequest.setReason(request.getReason());
 
-        LeaveRequest created = leaveRequestService.createLeaveRequest(leaveRequest);
+        LeaveRequest created = leaveRequestService.createLeaveRequest(leaveRequest, authentication.getName());
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @GetMapping("/employee/{employeeId}")
-    public ResponseEntity<List<LeaveRequest>> getLeaveRequestsByEmployee(@PathVariable Long employeeId) {
-        return ResponseEntity.ok(leaveRequestService.getLeaveRequestsByEmployee(employeeId));
+    public ResponseEntity<List<LeaveRequest>> getLeaveRequestsByEmployee(
+            @PathVariable Long employeeId,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(leaveRequestService.getLeaveRequestsByEmployee(employeeId, authentication.getName()));
     }
 
     @GetMapping("/manager/{managerId}")
@@ -57,18 +63,18 @@ public class LeaveRequestController {
             Authentication authentication
     ) {
         return ResponseEntity.ok(
-                leaveRequestService.getLeaveRequestsByManager(managerId, authentication.getName(), isHr(authentication))
+                leaveRequestService.getLeaveRequestsByManager(managerId, authentication.getName())
         );
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<LeaveRequest> getLeaveRequestById(@PathVariable Long id) {
-        return ResponseEntity.ok(leaveRequestService.getLeaveRequestById(id));
+    public ResponseEntity<LeaveRequest> getLeaveRequestById(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(leaveRequestService.getLeaveRequestById(id, authentication.getName()));
     }
 
     @PutMapping("/{id}/cancel")
-    public ResponseEntity<LeaveRequest> cancelLeaveRequest(@PathVariable Long id) {
-        return ResponseEntity.ok(leaveRequestService.cancelLeaveRequest(id));
+    public ResponseEntity<LeaveRequest> cancelLeaveRequest(@PathVariable Long id, Authentication authentication) {
+        return ResponseEntity.ok(leaveRequestService.cancelLeaveRequest(id, authentication.getName()));
     }
 
     @PutMapping("/{id}/approve")
@@ -78,7 +84,7 @@ public class LeaveRequestController {
             @RequestBody LeaveApprovalRequest request,
             Authentication authentication
     ) {
-        return ResponseEntity.ok(leaveRequestService.approveLeaveRequest(id, request, authentication.getName(), isHr(authentication)));
+        return ResponseEntity.ok(leaveRequestService.approveLeaveRequest(id, request, authentication.getName()));
     }
 
     @PutMapping("/{id}/reject")
@@ -88,12 +94,7 @@ public class LeaveRequestController {
             @RequestBody LeaveRejectionRequest request,
             Authentication authentication
     ) {
-        return ResponseEntity.ok(leaveRequestService.rejectLeaveRequest(id, request, authentication.getName(), isHr(authentication)));
-    }
-
-    private boolean isHr(Authentication authentication) {
-        return authentication.getAuthorities().stream()
-                .anyMatch(authority -> "ROLE_HR".equals(authority.getAuthority()));
+        return ResponseEntity.ok(leaveRequestService.rejectLeaveRequest(id, request, authentication.getName()));
     }
 
     public static class LeaveRequestCreateRequest {

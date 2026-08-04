@@ -130,7 +130,7 @@ CREATE TABLE leave_requests (
 
     CONSTRAINT fk_leave_request_reviewer
         FOREIGN KEY (reviewed_by)
-        REFERENCES employees(id),
+        REFERENCES users(id),
 
     CONSTRAINT chk_leave_request_status
         CHECK (

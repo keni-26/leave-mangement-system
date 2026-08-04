@@ -1,6 +1,10 @@
 package com.elms.dto;
 
 public class LeaveRejectionRequest {
+    /**
+     * @deprecated Reviewer identity is derived from the authenticated JWT user.
+     * This field is accepted temporarily for frontend compatibility and is ignored.
+     */
     private Long managerId;
     private String rejectionReason;
 

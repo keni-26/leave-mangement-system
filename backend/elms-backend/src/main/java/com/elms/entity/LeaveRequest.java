@@ -42,7 +42,7 @@ public class LeaveRequest {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reviewed_by")
-    private Employee reviewedBy;
+    private User reviewedBy;
 
     @Column(name = "reviewed_at")
     private LocalDateTime reviewedAt;
@@ -144,11 +144,11 @@ public class LeaveRequest {
         this.rejectionReason = rejectionReason;
     }
 
-    public Employee getReviewedBy() {
+    public User getReviewedBy() {
         return reviewedBy;
     }
 
-    public void setReviewedBy(Employee reviewedBy) {
+    public void setReviewedBy(User reviewedBy) {
         this.reviewedBy = reviewedBy;
     }
 
