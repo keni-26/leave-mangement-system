@@ -19,6 +19,7 @@ public class LeaveRequestService {
 
     private final LeaveRequestRepository leaveRequestRepository;
     private final EmployeeRepository employeeRepository;
+    private final UserRepository userRepository;
     private final LeaveTypeRepository leaveTypeRepository;
     private final LeaveBalanceRepository leaveBalanceRepository;
     private final HolidayRepository holidayRepository;
@@ -27,6 +28,7 @@ public class LeaveRequestService {
     public LeaveRequestService(
             LeaveRequestRepository leaveRequestRepository,
             EmployeeRepository employeeRepository,
+            UserRepository userRepository,
             LeaveTypeRepository leaveTypeRepository,
             LeaveBalanceRepository leaveBalanceRepository,
             HolidayRepository holidayRepository,
@@ -34,6 +36,7 @@ public class LeaveRequestService {
     ) {
         this.leaveRequestRepository = leaveRequestRepository;
         this.employeeRepository = employeeRepository;
+        this.userRepository = userRepository;
         this.leaveTypeRepository = leaveTypeRepository;
         this.leaveBalanceRepository = leaveBalanceRepository;
         this.holidayRepository = holidayRepository;
@@ -49,6 +52,19 @@ public class LeaveRequestService {
     public LeaveRequest getLeaveRequestById(Long id) {
         return leaveRequestRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Leave request not found with id: " + id));
+    }
+
+    public List<LeaveRequest> getLeaveRequestsByManager(Long managerId, String authenticatedEmail, boolean isHr) {
+        if (!isHr) {
+            Employee authenticatedManager = getEmployeeForAuthenticatedUser(authenticatedEmail);
+            if (!managerId.equals(authenticatedManager.getId())) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "Managers can only view leave requests for their own team"
+                );
+            }
+        }
+
+        return leaveRequestRepository.findByEmployeeManagerIdOrderByCreatedAtDesc(managerId);
     }
 
     @Transactional
@@ -112,10 +128,16 @@ public class LeaveRequestService {
     }
 
     @Transactional
-    public LeaveRequest approveLeaveRequest(Long id, LeaveApprovalRequest request) {
+    public LeaveRequest approveLeaveRequest(
+            Long id,
+            LeaveApprovalRequest request,
+            String authenticatedEmail,
+            boolean isHr
+    ) {
         LeaveRequest leaveRequest = getLeaveRequestById(id);
 
         validateManagerReviewEligibility(leaveRequest, request.getManagerId(), true);
+        validateAuthenticatedReviewer(authenticatedEmail, isHr, request.getManagerId());
 
         Employee manager = employeeRepository.findById(request.getManagerId())
                 .orElseThrow(() -> new RuntimeException("Manager not found with id: " + request.getManagerId()));
@@ -132,10 +154,16 @@ public class LeaveRequestService {
     }
 
     @Transactional
-    public LeaveRequest rejectLeaveRequest(Long id, LeaveRejectionRequest request) {
+    public LeaveRequest rejectLeaveRequest(
+            Long id,
+            LeaveRejectionRequest request,
+            String authenticatedEmail,
+            boolean isHr
+    ) {
         LeaveRequest leaveRequest = getLeaveRequestById(id);
 
         validateManagerReviewEligibility(leaveRequest, request.getManagerId(), false);
+        validateAuthenticatedReviewer(authenticatedEmail, isHr, request.getManagerId());
 
         if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
             throw new RuntimeException("Rejection reason is required");
@@ -176,6 +204,29 @@ public class LeaveRequestService {
         if (!managerId.equals(employee.getManager().getId())) {
             throw new RuntimeException("The provided manager is not assigned to this employee");
         }
+    }
+
+    private void validateAuthenticatedReviewer(String authenticatedEmail, boolean isHr, Long managerId) {
+        if (isHr) {
+            return;
+        }
+
+        Employee authenticatedManager = getEmployeeForAuthenticatedUser(authenticatedEmail);
+        if (!managerId.equals(authenticatedManager.getId())) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Managers can only review leave requests for their own team"
+            );
+        }
+    }
+
+    private Employee getEmployeeForAuthenticatedUser(String authenticatedEmail) {
+        User user = userRepository.findByEmail(authenticatedEmail)
+                .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException("Authenticated user not found"));
+
+        return employeeRepository.findByUserId(user.getId())
+                .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException(
+                        "Authenticated user is not linked to an employee record"
+                ));
     }
 
     private void validateRequest(LeaveRequest leaveRequest) {

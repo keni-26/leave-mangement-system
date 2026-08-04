@@ -8,6 +8,8 @@ import com.elms.entity.LeaveType;
 import com.elms.service.LeaveRequestService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -48,6 +50,17 @@ public class LeaveRequestController {
         return ResponseEntity.ok(leaveRequestService.getLeaveRequestsByEmployee(employeeId));
     }
 
+    @GetMapping("/manager/{managerId}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'HR')")
+    public ResponseEntity<List<LeaveRequest>> getLeaveRequestsByManager(
+            @PathVariable Long managerId,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(
+                leaveRequestService.getLeaveRequestsByManager(managerId, authentication.getName(), isHr(authentication))
+        );
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<LeaveRequest> getLeaveRequestById(@PathVariable Long id) {
         return ResponseEntity.ok(leaveRequestService.getLeaveRequestById(id));
@@ -59,13 +72,28 @@ public class LeaveRequestController {
     }
 
     @PutMapping("/{id}/approve")
-    public ResponseEntity<LeaveRequest> approveLeaveRequest(@PathVariable Long id, @RequestBody LeaveApprovalRequest request) {
-        return ResponseEntity.ok(leaveRequestService.approveLeaveRequest(id, request));
+    @PreAuthorize("hasAnyRole('MANAGER', 'HR')")
+    public ResponseEntity<LeaveRequest> approveLeaveRequest(
+            @PathVariable Long id,
+            @RequestBody LeaveApprovalRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(leaveRequestService.approveLeaveRequest(id, request, authentication.getName(), isHr(authentication)));
     }
 
     @PutMapping("/{id}/reject")
-    public ResponseEntity<LeaveRequest> rejectLeaveRequest(@PathVariable Long id, @RequestBody LeaveRejectionRequest request) {
-        return ResponseEntity.ok(leaveRequestService.rejectLeaveRequest(id, request));
+    @PreAuthorize("hasAnyRole('MANAGER', 'HR')")
+    public ResponseEntity<LeaveRequest> rejectLeaveRequest(
+            @PathVariable Long id,
+            @RequestBody LeaveRejectionRequest request,
+            Authentication authentication
+    ) {
+        return ResponseEntity.ok(leaveRequestService.rejectLeaveRequest(id, request, authentication.getName(), isHr(authentication)));
+    }
+
+    private boolean isHr(Authentication authentication) {
+        return authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_HR".equals(authority.getAuthority()));
     }
 
     public static class LeaveRequestCreateRequest {

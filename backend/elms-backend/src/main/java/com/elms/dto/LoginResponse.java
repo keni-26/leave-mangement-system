@@ -3,12 +3,14 @@ package com.elms.dto;
 public class LoginResponse {
     private String token;
     private Long userId;
+    private Long employeeId;
     private String email;
     private String role;
 
-    public LoginResponse(String token, Long userId, String email, String role) {
+    public LoginResponse(String token, Long userId, Long employeeId, String email, String role) {
         this.token = token;
         this.userId = userId;
+        this.employeeId = employeeId;
         this.email = email;
         this.role = role;
     }
@@ -27,6 +29,14 @@ public class LoginResponse {
 
     public void setUserId(Long userId) {
         this.userId = userId;
+    }
+
+    public Long getEmployeeId() {
+        return employeeId;
+    }
+
+    public void setEmployeeId(Long employeeId) {
+        this.employeeId = employeeId;
     }
 
     public String getEmail() {

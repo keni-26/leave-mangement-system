@@ -2,6 +2,7 @@ package com.elms.controller;
 
 import com.elms.dto.LoginRequest;
 import com.elms.dto.LoginResponse;
+import com.elms.repository.EmployeeRepository;
 import com.elms.entity.User;
 import com.elms.repository.UserRepository;
 import com.elms.security.JwtService;
@@ -18,11 +19,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final UserRepository userRepository;
+    private final EmployeeRepository employeeRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
-    public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    public AuthController(UserRepository userRepository, EmployeeRepository employeeRepository,
+                          PasswordEncoder passwordEncoder, JwtService jwtService) {
         this.userRepository = userRepository;
+        this.employeeRepository = employeeRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
@@ -44,7 +48,10 @@ public class AuthController {
         }
 
         String token = jwtService.generateToken(user.getEmail());
-        LoginResponse response = new LoginResponse(token, user.getId(), user.getEmail(), user.getRole().name());
+        Long employeeId = employeeRepository.findByUserId(user.getId())
+                .map(employee -> employee.getId())
+                .orElse(null);
+        LoginResponse response = new LoginResponse(token, user.getId(), employeeId, user.getEmail(), user.getRole().name());
         return ResponseEntity.ok(response);
     }
 

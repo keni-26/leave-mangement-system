@@ -14,6 +14,8 @@ public interface LeaveRequestRepository extends JpaRepository<LeaveRequest, Long
 
     List<LeaveRequest> findByEmployeeOrderByCreatedAtDesc(Employee employee);
 
+    List<LeaveRequest> findByEmployeeManagerIdOrderByCreatedAtDesc(Long managerId);
+
     @Query("SELECT lr FROM LeaveRequest lr WHERE lr.employee = :employee AND lr.status IN :statuses")
     List<LeaveRequest> findByEmployeeAndStatusIn(
             @Param("employee") Employee employee,

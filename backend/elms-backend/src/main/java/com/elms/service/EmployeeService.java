@@ -24,11 +24,13 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final LeaveBalanceService leaveBalanceService;
 
-    public EmployeeService(EmployeeRepository employeeRepository, UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public EmployeeService(EmployeeRepository employeeRepository, UserRepository userRepository, PasswordEncoder passwordEncoder, LeaveBalanceService leaveBalanceService) {
         this.employeeRepository = employeeRepository;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.leaveBalanceService = leaveBalanceService;
     }
 
     @Transactional
@@ -74,6 +76,8 @@ public class EmployeeService {
         employee.setCreatedAt(now);
         employee.setUpdatedAt(now);
         employee = employeeRepository.save(employee);
+
+        leaveBalanceService.createMissingBalancesForEmployee(employee);
 
         return toResponse(employee);
     }

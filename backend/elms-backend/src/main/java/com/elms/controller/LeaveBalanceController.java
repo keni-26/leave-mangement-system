@@ -5,6 +5,8 @@ import com.elms.service.LeaveBalanceService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 
 import java.util.List;
 
@@ -20,19 +22,21 @@ public class LeaveBalanceController {
     }
 
     @GetMapping("/employee/{employeeId}")
-    public ResponseEntity<List<LeaveBalance>> getBalancesByEmployee(@PathVariable Long employeeId) {
-        return ResponseEntity.ok(leaveBalanceService.getBalancesByEmployee(employeeId));
+    public ResponseEntity<List<LeaveBalance>> getBalancesByEmployee(@PathVariable Long employeeId, Authentication authentication) {
+        return ResponseEntity.ok(leaveBalanceService.getBalancesByEmployee(employeeId, authentication));
     }
 
     @GetMapping("/employee/{employeeId}/leave-type/{leaveTypeId}")
     public ResponseEntity<LeaveBalance> getBalanceByEmployeeAndLeaveType(
             @PathVariable Long employeeId,
-            @PathVariable Long leaveTypeId
+            @PathVariable Long leaveTypeId,
+            Authentication authentication
     ) {
-        return ResponseEntity.ok(leaveBalanceService.getBalanceByEmployeeAndLeaveType(employeeId, leaveTypeId));
+        return ResponseEntity.ok(leaveBalanceService.getBalanceByEmployeeAndLeaveType(employeeId, leaveTypeId, authentication));
     }
 
     @PostMapping("/employee/{employeeId}/leave-type/{leaveTypeId}")
+    @PreAuthorize("hasRole('HR')")
     public ResponseEntity<LeaveBalance> createBalance(
             @PathVariable Long employeeId,
             @PathVariable Long leaveTypeId

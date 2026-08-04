@@ -3,6 +3,7 @@ package com.elms.service;
 import com.elms.entity.LeaveType;
 import com.elms.repository.LeaveTypeRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -11,9 +12,11 @@ import java.util.List;
 public class LeaveTypeService {
 
     private final LeaveTypeRepository leaveTypeRepository;
+    private final LeaveBalanceService leaveBalanceService;
 
-    public LeaveTypeService(LeaveTypeRepository leaveTypeRepository) {
+    public LeaveTypeService(LeaveTypeRepository leaveTypeRepository, LeaveBalanceService leaveBalanceService) {
         this.leaveTypeRepository = leaveTypeRepository;
+        this.leaveBalanceService = leaveBalanceService;
     }
 
     // Get all active leave types
@@ -29,6 +32,7 @@ public class LeaveTypeService {
     }
 
     // Create leave type
+    @Transactional
     public LeaveType createLeaveType(LeaveType leaveType) {
 
         if (leaveTypeRepository.existsByName(leaveType.getName())) {
@@ -42,7 +46,9 @@ public class LeaveTypeService {
         leaveType.setCreatedAt(now);
         leaveType.setUpdatedAt(now);
 
-        return leaveTypeRepository.save(leaveType);
+        LeaveType createdLeaveType = leaveTypeRepository.save(leaveType);
+        leaveBalanceService.createMissingBalancesForLeaveType(createdLeaveType);
+        return createdLeaveType;
     }
 
     // Update leave type
