@@ -5,6 +5,7 @@ import com.elms.entity.Notification;
 import com.elms.entity.NotificationType;
 import com.elms.entity.User;
 import com.elms.dto.NotificationResponse;
+import com.elms.exception.ResourceNotFoundException;
 import com.elms.repository.NotificationRepository;
 import com.elms.repository.UserRepository;
 import org.springframework.security.access.AccessDeniedException;
@@ -44,7 +45,7 @@ public class NotificationService {
     public NotificationResponse markNotificationAsRead(Long id, String authenticatedEmail) {
         User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
         Notification notification = notificationRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Notification not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + id));
         if (!authenticatedUser.getId().equals(notification.getUser().getId())) {
             throw new AccessDeniedException("You are not authorized to access this notification");
         }

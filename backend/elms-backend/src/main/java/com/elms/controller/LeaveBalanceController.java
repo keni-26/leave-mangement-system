@@ -1,6 +1,6 @@
 package com.elms.controller;
 
-import com.elms.entity.LeaveBalance;
+import com.elms.dto.LeaveBalanceResponse;
 import com.elms.service.LeaveBalanceService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,12 +22,12 @@ public class LeaveBalanceController {
     }
 
     @GetMapping("/employee/{employeeId}")
-    public ResponseEntity<List<LeaveBalance>> getBalancesByEmployee(@PathVariable Long employeeId, Authentication authentication) {
+    public ResponseEntity<List<LeaveBalanceResponse>> getBalancesByEmployee(@PathVariable Long employeeId, Authentication authentication) {
         return ResponseEntity.ok(leaveBalanceService.getBalancesByEmployee(employeeId, authentication));
     }
 
     @GetMapping("/employee/{employeeId}/leave-type/{leaveTypeId}")
-    public ResponseEntity<LeaveBalance> getBalanceByEmployeeAndLeaveType(
+    public ResponseEntity<LeaveBalanceResponse> getBalanceByEmployeeAndLeaveType(
             @PathVariable Long employeeId,
             @PathVariable Long leaveTypeId,
             Authentication authentication
@@ -37,11 +37,11 @@ public class LeaveBalanceController {
 
     @PostMapping("/employee/{employeeId}/leave-type/{leaveTypeId}")
     @PreAuthorize("hasRole('HR')")
-    public ResponseEntity<LeaveBalance> createBalance(
+    public ResponseEntity<LeaveBalanceResponse> createBalance(
             @PathVariable Long employeeId,
             @PathVariable Long leaveTypeId
     ) {
-        LeaveBalance createdBalance = leaveBalanceService.createBalance(employeeId, leaveTypeId);
+        LeaveBalanceResponse createdBalance = leaveBalanceService.createBalance(employeeId, leaveTypeId);
         return ResponseEntity.status(HttpStatus.CREATED).body(createdBalance);
     }
 }

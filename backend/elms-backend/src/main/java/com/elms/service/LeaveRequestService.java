@@ -2,6 +2,8 @@ package com.elms.service;
 
 import com.elms.dto.LeaveApprovalRequest;
 import com.elms.dto.LeaveRejectionRequest;
+import com.elms.dto.LeaveRequestResponse;
+import com.elms.exception.ResourceNotFoundException;
 import com.elms.entity.Employee;
 import com.elms.entity.LeaveBalance;
 import com.elms.entity.LeaveRequest;
@@ -58,24 +60,27 @@ public class LeaveRequestService {
         this.notificationService = notificationService;
     }
 
-    public List<LeaveRequest> getLeaveRequestsByEmployee(Long employeeId, String authenticatedEmail) {
+    @Transactional(readOnly = true)
+    public List<LeaveRequestResponse> getLeaveRequestsByEmployee(Long employeeId, String authenticatedEmail) {
         User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
         Employee employee = getEmployee(employeeId);
         ensureCanViewEmployeeRequests(authenticatedUser, employee);
-        return leaveRequestRepository.findByEmployeeOrderByCreatedAtDesc(employee);
+        return leaveRequestRepository.findByEmployeeOrderByCreatedAtDesc(employee).stream().map(this::toResponse).toList();
     }
 
-    public LeaveRequest getLeaveRequestById(Long id, String authenticatedEmail) {
+    @Transactional(readOnly = true)
+    public LeaveRequestResponse getLeaveRequestById(Long id, String authenticatedEmail) {
         User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
         LeaveRequest leaveRequest = findLeaveRequestById(id);
         ensureCanViewEmployeeRequests(authenticatedUser, leaveRequest.getEmployee());
-        return leaveRequest;
+        return toResponse(leaveRequest);
     }
 
-    public List<LeaveRequest> getLeaveRequestsByManager(Long managerId, String authenticatedEmail) {
+    @Transactional(readOnly = true)
+    public List<LeaveRequestResponse> getLeaveRequestsByManager(Long managerId, String authenticatedEmail) {
         User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
         if (authenticatedUser.getRole() == Role.HR) {
-            return leaveRequestRepository.findByEmployeeManagerIdOrderByCreatedAtDesc(managerId);
+            return leaveRequestRepository.findByEmployeeManagerIdOrderByCreatedAtDesc(managerId).stream().map(this::toResponse).toList();
         }
 
         if (authenticatedUser.getRole() != Role.MANAGER) {
@@ -86,26 +91,26 @@ public class LeaveRequestService {
         if (!managerId.equals(authenticatedManager.getId())) {
             throw new AccessDeniedException("Managers can only view leave requests for their own team");
         }
-        return leaveRequestRepository.findByEmployeeManagerIdOrderByCreatedAtDesc(managerId);
+        return leaveRequestRepository.findByEmployeeManagerIdOrderByCreatedAtDesc(managerId).stream().map(this::toResponse).toList();
     }
 
     @Transactional
-    public LeaveRequest createLeaveRequest(LeaveRequest leaveRequest, String authenticatedEmail) {
+    public LeaveRequestResponse createLeaveRequest(LeaveRequest leaveRequest, String authenticatedEmail) {
         validateRequest(leaveRequest);
 
         User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
         Employee employee = getEmployee(leaveRequest.getEmployee().getId());
-        if (authenticatedUser.getRole() == Role.EMPLOYEE) {
+        if (authenticatedUser.getRole() != Role.HR) {
             Employee authenticatedEmployee = getEmployeeForAuthenticatedUser(authenticatedUser);
             if (!authenticatedEmployee.getId().equals(employee.getId())) {
-                throw new AccessDeniedException("Employees can only create leave requests for themselves");
+                throw new AccessDeniedException("Users can only create leave requests for themselves");
             }
         }
 
         LeaveType leaveType = leaveTypeRepository.findById(leaveRequest.getLeaveType().getId())
-                .orElseThrow(() -> new RuntimeException("Leave type not found with id: " + leaveRequest.getLeaveType().getId()));
+                .orElseThrow(() -> new ResourceNotFoundException("Leave type not found with id: " + leaveRequest.getLeaveType().getId()));
         if (!Boolean.TRUE.equals(leaveType.getActive())) {
-            throw new RuntimeException("Leave type is inactive and cannot be used for new leave requests.");
+            throw new IllegalArgumentException("Leave type is inactive and cannot be used for new leave requests.");
         }
 
         leaveRequest.setEmployee(employee);
@@ -113,7 +118,7 @@ public class LeaveRequestService {
 
         BigDecimal leaveDays = calculateWorkingDays(leaveRequest.getStartDate(), leaveRequest.getEndDate());
         if (leaveDays.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new RuntimeException("No working days available in the selected date range");
+            throw new IllegalArgumentException("No working days available in the selected date range");
         }
         leaveRequest.setLeaveDays(leaveDays);
 
@@ -122,7 +127,7 @@ public class LeaveRequestService {
 
         if (Boolean.TRUE.equals(leaveType.getApprovalRequired())) {
             if (employee.getManager() == null) {
-                throw new RuntimeException("Manager assignment is required for this leave type");
+            throw new IllegalArgumentException("Manager assignment is required for this leave type");
             }
             leaveRequest.setStatus(LeaveRequestStatus.PENDING);
         } else {
@@ -140,11 +145,11 @@ public class LeaveRequestService {
         } else {
             notifyManagerOfPendingLeave(savedRequest);
         }
-        return savedRequest;
+        return toResponse(savedRequest);
     }
 
     @Transactional
-    public LeaveRequest cancelLeaveRequest(Long id, String authenticatedEmail) {
+    public LeaveRequestResponse cancelLeaveRequest(Long id, String authenticatedEmail) {
         User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
         LeaveRequest leaveRequest = findLeaveRequestById(id);
 
@@ -157,18 +162,18 @@ public class LeaveRequestService {
             throw new AccessDeniedException("Only the employee who owns this leave request can cancel it");
         }
         if (leaveRequest.getStatus() != LeaveRequestStatus.PENDING) {
-            throw new RuntimeException("Only PENDING leave requests can be cancelled");
+            throw new IllegalStateException("Only PENDING leave requests can be cancelled");
         }
 
         leaveRequest.setStatus(LeaveRequestStatus.CANCELLED);
         leaveRequest.setUpdatedAt(LocalDateTime.now());
         LeaveRequest savedRequest = leaveRequestRepository.save(leaveRequest);
         notifyManagerOfCancellation(savedRequest);
-        return savedRequest;
+        return toResponse(savedRequest);
     }
 
     @Transactional
-    public LeaveRequest approveLeaveRequest(
+    public LeaveRequestResponse approveLeaveRequest(
             Long id,
             LeaveApprovalRequest request,
             String authenticatedEmail
@@ -186,11 +191,11 @@ public class LeaveRequestService {
         LeaveRequest savedRequest = leaveRequestRepository.save(leaveRequest);
         updateBalance(savedRequest);
         notifyApproval(savedRequest);
-        return savedRequest;
+        return toResponse(savedRequest);
     }
 
     @Transactional
-    public LeaveRequest rejectLeaveRequest(
+    public LeaveRequestResponse rejectLeaveRequest(
             Long id,
             LeaveRejectionRequest request,
             String authenticatedEmail
@@ -200,7 +205,7 @@ public class LeaveRequestService {
         validateReviewEligibility(leaveRequest, authenticatedUser, false);
 
         if (request.getRejectionReason() == null || request.getRejectionReason().trim().isEmpty()) {
-            throw new RuntimeException("Rejection reason is required");
+            throw new IllegalArgumentException("Rejection reason is required");
         }
 
         leaveRequest.setStatus(LeaveRequestStatus.REJECTED);
@@ -211,7 +216,7 @@ public class LeaveRequestService {
 
         LeaveRequest savedRequest = leaveRequestRepository.save(leaveRequest);
         notifyRejection(savedRequest);
-        return savedRequest;
+        return toResponse(savedRequest);
     }
 
     private void ensureCanViewEmployeeRequests(User authenticatedUser, Employee targetEmployee) {
@@ -234,10 +239,10 @@ public class LeaveRequestService {
 
     private void validateReviewEligibility(LeaveRequest leaveRequest, User authenticatedUser, boolean isApproval) {
         if (leaveRequest.getStatus() != LeaveRequestStatus.PENDING) {
-            throw new RuntimeException("Only PENDING leave requests can be " + (isApproval ? "approved" : "rejected"));
+            throw new IllegalStateException("Only PENDING leave requests can be " + (isApproval ? "approved" : "rejected"));
         }
         if (!Boolean.TRUE.equals(leaveRequest.getLeaveType().getApprovalRequired())) {
-            throw new RuntimeException("Only approval-required leave requests can be manually approved or rejected");
+            throw new IllegalStateException("Only approval-required leave requests can be manually approved or rejected");
         }
         if (authenticatedUser.getRole() == Role.HR) {
             return;
@@ -266,32 +271,32 @@ public class LeaveRequestService {
 
     private Employee getEmployee(Long employeeId) {
         return employeeRepository.findById(employeeId)
-                .orElseThrow(() -> new RuntimeException("Employee not found with id: " + employeeId));
+                .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + employeeId));
     }
 
     private LeaveRequest findLeaveRequestById(Long id) {
         return leaveRequestRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Leave request not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Leave request not found with id: " + id));
     }
 
     private void validateRequest(LeaveRequest leaveRequest) {
         if (leaveRequest.getEmployee() == null || leaveRequest.getEmployee().getId() == null) {
-            throw new RuntimeException("employeeId is required");
+            throw new IllegalArgumentException("employeeId is required");
         }
         if (leaveRequest.getLeaveType() == null || leaveRequest.getLeaveType().getId() == null) {
-            throw new RuntimeException("leaveTypeId is required");
+            throw new IllegalArgumentException("leaveTypeId is required");
         }
         if (leaveRequest.getStartDate() == null || leaveRequest.getEndDate() == null) {
-            throw new RuntimeException("startDate and endDate are required");
+            throw new IllegalArgumentException("startDate and endDate are required");
         }
         if (leaveRequest.getStartDate().isAfter(leaveRequest.getEndDate())) {
-            throw new RuntimeException("startDate must not be after endDate");
+            throw new IllegalArgumentException("startDate must not be after endDate");
         }
         if (leaveRequest.getStartDate().isBefore(LocalDate.now())) {
-            throw new RuntimeException("startDate cannot be in the past");
+            throw new IllegalArgumentException("startDate cannot be in the past");
         }
         if (leaveRequest.getReason() == null || leaveRequest.getReason().trim().isEmpty()) {
-            throw new RuntimeException("reason is required");
+            throw new IllegalArgumentException("reason is required");
         }
     }
 
@@ -315,13 +320,15 @@ public class LeaveRequestService {
     }
 
     private void validateBalance(Employee employee, LeaveType leaveType, BigDecimal requestedDays) {
-        if (!Boolean.TRUE.equals(leaveType.getApprovalRequired()) || isLossOfPay(leaveType)) {
+        // Auto-approved leave still consumes its configured allocation. Loss of Pay is the
+        // only configured leave type that intentionally has no balance limit.
+        if (isLossOfPay(leaveType)) {
             return;
         }
 
         LeaveBalance balance = getLeaveBalance(employee, leaveType);
         if (requestedDays.compareTo(balance.getRemainingDays()) > 0) {
-            throw new RuntimeException("Insufficient leave balance");
+            throw new IllegalStateException("Insufficient leave balance");
         }
     }
 
@@ -333,7 +340,7 @@ public class LeaveRequestService {
 
     private LeaveBalance getLeaveBalance(Employee employee, LeaveType leaveType) {
         return leaveBalanceRepository.findByEmployeeAndLeaveType(employee, leaveType)
-                .orElseThrow(() -> new RuntimeException("Leave balance not found for employee and leave type"));
+                .orElseThrow(() -> new ResourceNotFoundException("Leave balance not found for employee and leave type"));
     }
 
     private void validateNoOverlap(Employee employee, LocalDate startDate, LocalDate endDate) {
@@ -343,7 +350,7 @@ public class LeaveRequestService {
                 LeaveRequestStatus.AUTO_APPROVED
         );
         if (!leaveRequestRepository.findOverlappingRequests(employee, startDate, endDate, blockingStatuses).isEmpty()) {
-            throw new RuntimeException("Leave request overlaps with an existing request");
+            throw new IllegalStateException("Leave request overlaps with an existing request");
         }
     }
 
@@ -400,5 +407,25 @@ public class LeaveRequestService {
         balance.setUsedDays(balance.getUsedDays().add(leaveRequest.getLeaveDays()));
         balance.setUpdatedAt(LocalDateTime.now());
         leaveBalanceRepository.save(balance);
+    }
+
+    private LeaveRequestResponse toResponse(LeaveRequest request) {
+        LeaveRequestResponse response = new LeaveRequestResponse();
+        response.setId(request.getId());
+        response.setEmployeeId(request.getEmployee().getId());
+        response.setEmployeeName(request.getEmployee().getName());
+        response.setEmployeeCode(request.getEmployee().getEmployeeCode());
+        response.setLeaveTypeId(request.getLeaveType().getId());
+        response.setLeaveTypeName(request.getLeaveType().getName());
+        response.setStartDate(request.getStartDate());
+        response.setEndDate(request.getEndDate());
+        response.setLeaveDays(request.getLeaveDays());
+        response.setReason(request.getReason());
+        response.setStatus(request.getStatus());
+        response.setRejectionReason(request.getRejectionReason());
+        response.setCreatedAt(request.getCreatedAt());
+        response.setUpdatedAt(request.getUpdatedAt());
+        response.setReviewedAt(request.getReviewedAt());
+        return response;
     }
 }

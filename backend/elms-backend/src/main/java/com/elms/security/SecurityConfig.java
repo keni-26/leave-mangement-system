@@ -22,9 +22,11 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import jakarta.servlet.http.HttpServletResponse;
 
 import java.util.Collections;
 import java.util.List;
+import java.time.LocalDateTime;
 
 @Configuration
 @EnableWebSecurity
@@ -106,10 +108,21 @@ public class SecurityConfig {
                         .requestMatchers("/api/notifications/**").hasAnyRole("EMPLOYEE", "MANAGER", "HR")
                         .anyRequest().authenticated()
                 )
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((request, response, exception) -> writeSecurityError(response, HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized", "Authentication is required", request.getRequestURI()))
+                        .accessDeniedHandler((request, response, exception) -> writeSecurityError(response, HttpServletResponse.SC_FORBIDDEN, "Forbidden", "You are not authorized to perform this action", request.getRequestURI()))
+                )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .httpBasic(httpBasic -> httpBasic.disable())
                 .formLogin(form -> form.disable());
 
         return http.build();
+    }
+
+    private void writeSecurityError(HttpServletResponse response, int status, String error, String message, String path) throws java.io.IOException {
+        response.setStatus(status);
+        response.setContentType("application/json");
+        response.getWriter().write("{\"timestamp\":\"" + LocalDateTime.now() + "\",\"status\":" + status
+                + ",\"error\":\"" + error + "\",\"message\":\"" + message + "\",\"path\":\"" + path + "\"}");
     }
 }

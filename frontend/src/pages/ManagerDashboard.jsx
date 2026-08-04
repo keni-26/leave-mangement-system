@@ -33,6 +33,7 @@ function ManagerDashboard() {
   const [rejectingRequest, setRejectingRequest] = useState(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [rejectionError, setRejectionError] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
 
   const clearAuthentication = useCallback(() => {
     AUTH_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
@@ -77,6 +78,11 @@ function ManagerDashboard() {
   }, [handleRequestError, managerId, userId]);
 
   useEffect(() => { loadDashboardData(); }, [loadDashboardData]);
+  useEffect(() => {
+    const handleNavigation = (event) => setShowProfile(event.detail === "#profile");
+    window.addEventListener("elms:navigate", handleNavigation);
+    return () => window.removeEventListener("elms:navigate", handleNavigation);
+  }, []);
 
   const handleApprove = async (requestId) => {
     if (!window.confirm("Approve this leave request?")) return;
@@ -175,30 +181,37 @@ function ManagerDashboard() {
       {error && <p className="dashboard-message error-message" role="alert">{error}</p>}
       {success && <p className="dashboard-message success-message" role="status">{success}</p>}
 
-      <section className="dashboard-section">
+      <section id="dashboard" className="balance-grid" aria-label="Team leave summary">
+        <article className="balance-card"><h3>Pending requests</h3><dl><div><dt>Needs your action</dt><dd>{leaveRequests.filter((request) => request.status === "PENDING").length}</dd></div></dl></article>
+        <article className="balance-card"><h3>Approved requests</h3><dl><div><dt>Team requests</dt><dd>{leaveRequests.filter((request) => request.status === "APPROVED").length}</dd></div></dl></article>
+        <article className="balance-card"><h3>Team members</h3><dl><div><dt>With leave activity</dt><dd>{new Set(leaveRequests.map((request) => request.employeeId)).size}</dd></div></dl></article>
+      </section>
+
+      <section id="requests" className="dashboard-section">
         <h2>Team Leave Requests</h2>
         {leaveRequests.length === 0 ? <p className="empty-state">There are no leave requests from your team.</p> : (
           <div className="table-wrapper"><table><thead><tr><th>Employee</th><th>Leave type</th><th>Dates</th><th>Days</th><th>Reason</th><th>Status</th><th>Created</th><th>Action</th></tr></thead><tbody>
             {leaveRequests.map((request) => <tr key={request.id}>
-              <td>{request.employee?.name || "-"}{request.employee?.employeeCode && <small className="employee-code">{request.employee.employeeCode}</small>}</td>
-              <td>{request.leaveType?.name || "-"}</td>
+              <td>{request.employeeName || "-"}{request.employeeCode && <small className="employee-code">{request.employeeCode}</small>}</td>
+              <td>{request.leaveTypeName || "-"}</td>
               <td>{formatDate(request.startDate)} – {formatDate(request.endDate)}</td>
               <td>{request.leaveDays ?? 0}</td>
               <td>{request.reason || "-"}{request.rejectionReason && <small className="rejection-reason">Rejection reason: {request.rejectionReason}</small>}</td>
               <td><span className={`status status-${String(request.status).toLowerCase()}`}>{request.status}</span></td>
               <td>{formatDate(request.createdAt)}</td>
-              <td>{request.status === "PENDING" && <div className="request-actions"><button type="button" disabled={updatingId === `leave-${request.id}`} onClick={() => handleApprove(request.id)}>{updatingId === `leave-${request.id}` ? "Updating..." : "Approve"}</button><button type="button" className="danger-button" disabled={updatingId === `leave-${request.id}`} onClick={() => openRejectForm(request)}>Reject</button></div>}</td>
+              <td>{request.status === "PENDING" ? <div className="request-actions"><button type="button" disabled={updatingId === `leave-${request.id}`} onClick={() => handleApprove(request.id)}>{updatingId === `leave-${request.id}` ? "Updating..." : "Approve"}</button><button type="button" className="danger-button" disabled={updatingId === `leave-${request.id}`} onClick={() => openRejectForm(request)}>Reject</button></div> : <span className="muted-action">Processed</span>}</td>
             </tr>)}
           </tbody></table></div>
         )}
       </section>
 
-      <section className="dashboard-section">
+      <section id="notifications" className="dashboard-section">
         <div className="section-heading-row"><h2>Notifications</h2><button type="button" className="secondary-button" disabled={!unreadNotifications || updatingId === "notifications-all"} onClick={handleMarkAllAsRead}>{updatingId === "notifications-all" ? "Updating..." : "Mark all as read"}</button></div>
         {notifications.length === 0 ? <p className="empty-state">You have no notifications.</p> : <div className="notification-list">{notifications.map((notification) => <article className={`notification ${notification.isRead ? "read" : "unread"}`} key={notification.id}><div><p>{notification.message}</p><small>{notification.type} · {formatDate(notification.createdAt)}</small></div>{!notification.isRead && <button type="button" className="secondary-button" disabled={updatingId === `notification-${notification.id}`} onClick={() => handleMarkAsRead(notification.id)}>{updatingId === `notification-${notification.id}` ? "Updating..." : "Mark as read"}</button>}</article>)}</div>}
       </section>
 
-      {rejectingRequest && <div className="modal-backdrop" role="presentation"><section className="reject-modal" role="dialog" aria-modal="true" aria-labelledby="reject-title"><h2 id="reject-title">Reject Leave Request</h2><p>Provide a reason for rejecting {rejectingRequest.employee?.name || "this employee"}'s request.</p><form onSubmit={handleReject}><label>Rejection reason<textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} rows="4" required autoFocus /></label>{rejectionError && <p className="error-message" role="alert">{rejectionError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={updatingId === `leave-${rejectingRequest.id}`} onClick={() => setRejectingRequest(null)}>Cancel</button><button type="submit" className="danger-button" disabled={updatingId === `leave-${rejectingRequest.id}`}>{updatingId === `leave-${rejectingRequest.id}` ? "Rejecting..." : "Reject request"}</button></div></form></section></div>}
+      {showProfile && <section id="profile" className="dashboard-section profile-panel"><h2>Profile</h2><dl><div><dt>Email</dt><dd>{email || "-"}</dd></div><div><dt>Role</dt><dd>MANAGER</dd></div></dl></section>}
+      {rejectingRequest && <div className="modal-backdrop" role="presentation"><section className="reject-modal" role="dialog" aria-modal="true" aria-labelledby="reject-title"><h2 id="reject-title">Reject Leave Request</h2><p>Provide a reason for rejecting {rejectingRequest.employeeName || "this employee"}'s request.</p><form onSubmit={handleReject}><label>Rejection reason<textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} rows="4" required autoFocus /></label>{rejectionError && <p className="error-message" role="alert">{rejectionError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={updatingId === `leave-${rejectingRequest.id}`} onClick={() => setRejectingRequest(null)}>Cancel</button><button type="submit" className="danger-button" disabled={updatingId === `leave-${rejectingRequest.id}`}>{updatingId === `leave-${rejectingRequest.id}` ? "Rejecting..." : "Reject request"}</button></div></form></section></div>}
     </main>
   );
 }

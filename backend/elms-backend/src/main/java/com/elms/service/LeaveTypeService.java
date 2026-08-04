@@ -1,6 +1,7 @@
 package com.elms.service;
 
 import com.elms.entity.LeaveType;
+import com.elms.exception.ResourceNotFoundException;
 import com.elms.repository.LeaveTypeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,8 +28,7 @@ public class LeaveTypeService {
     // Get leave type by ID
     public LeaveType getLeaveTypeById(Long id) {
         return leaveTypeRepository.findById(id)
-                .orElseThrow(() ->
-                        new RuntimeException("Leave type not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Leave type not found with id: " + id));
     }
 
     // Create leave type
@@ -36,7 +36,7 @@ public class LeaveTypeService {
     public LeaveType createLeaveType(LeaveType leaveType) {
 
         if (leaveTypeRepository.existsByName(leaveType.getName())) {
-            throw new RuntimeException(
+            throw new IllegalStateException(
                     "Leave type already exists: " + leaveType.getName()
             );
         }

@@ -2,6 +2,7 @@ package com.elms.controller;
 
 import com.elms.dto.LeaveApprovalRequest;
 import com.elms.dto.LeaveRejectionRequest;
+import com.elms.dto.LeaveRequestResponse;
 import com.elms.entity.Employee;
 import com.elms.entity.LeaveRequest;
 import com.elms.entity.LeaveType;
@@ -11,6 +12,12 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.FutureOrPresent;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -27,8 +34,8 @@ public class LeaveRequestController {
     }
 
     @PostMapping
-    public ResponseEntity<LeaveRequest> createLeaveRequest(
-            @RequestBody LeaveRequestCreateRequest request,
+    public ResponseEntity<LeaveRequestResponse> createLeaveRequest(
+            @Valid @RequestBody LeaveRequestCreateRequest request,
             Authentication authentication
     ) {
         LeaveRequest leaveRequest = new LeaveRequest();
@@ -44,12 +51,12 @@ public class LeaveRequestController {
         leaveRequest.setEndDate(request.getEndDate());
         leaveRequest.setReason(request.getReason());
 
-        LeaveRequest created = leaveRequestService.createLeaveRequest(leaveRequest, authentication.getName());
+        LeaveRequestResponse created = leaveRequestService.createLeaveRequest(leaveRequest, authentication.getName());
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
     @GetMapping("/employee/{employeeId}")
-    public ResponseEntity<List<LeaveRequest>> getLeaveRequestsByEmployee(
+    public ResponseEntity<List<LeaveRequestResponse>> getLeaveRequestsByEmployee(
             @PathVariable Long employeeId,
             Authentication authentication
     ) {
@@ -58,7 +65,7 @@ public class LeaveRequestController {
 
     @GetMapping("/manager/{managerId}")
     @PreAuthorize("hasAnyRole('MANAGER', 'HR')")
-    public ResponseEntity<List<LeaveRequest>> getLeaveRequestsByManager(
+    public ResponseEntity<List<LeaveRequestResponse>> getLeaveRequestsByManager(
             @PathVariable Long managerId,
             Authentication authentication
     ) {
@@ -68,20 +75,20 @@ public class LeaveRequestController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<LeaveRequest> getLeaveRequestById(@PathVariable Long id, Authentication authentication) {
+    public ResponseEntity<LeaveRequestResponse> getLeaveRequestById(@PathVariable Long id, Authentication authentication) {
         return ResponseEntity.ok(leaveRequestService.getLeaveRequestById(id, authentication.getName()));
     }
 
     @PutMapping("/{id}/cancel")
-    public ResponseEntity<LeaveRequest> cancelLeaveRequest(@PathVariable Long id, Authentication authentication) {
+    public ResponseEntity<LeaveRequestResponse> cancelLeaveRequest(@PathVariable Long id, Authentication authentication) {
         return ResponseEntity.ok(leaveRequestService.cancelLeaveRequest(id, authentication.getName()));
     }
 
     @PutMapping("/{id}/approve")
     @PreAuthorize("hasAnyRole('MANAGER', 'HR')")
-    public ResponseEntity<LeaveRequest> approveLeaveRequest(
+    public ResponseEntity<LeaveRequestResponse> approveLeaveRequest(
             @PathVariable Long id,
-            @RequestBody LeaveApprovalRequest request,
+            @Valid @RequestBody LeaveApprovalRequest request,
             Authentication authentication
     ) {
         return ResponseEntity.ok(leaveRequestService.approveLeaveRequest(id, request, authentication.getName()));
@@ -89,20 +96,20 @@ public class LeaveRequestController {
 
     @PutMapping("/{id}/reject")
     @PreAuthorize("hasAnyRole('MANAGER', 'HR')")
-    public ResponseEntity<LeaveRequest> rejectLeaveRequest(
+    public ResponseEntity<LeaveRequestResponse> rejectLeaveRequest(
             @PathVariable Long id,
-            @RequestBody LeaveRejectionRequest request,
+            @Valid @RequestBody LeaveRejectionRequest request,
             Authentication authentication
     ) {
         return ResponseEntity.ok(leaveRequestService.rejectLeaveRequest(id, request, authentication.getName()));
     }
 
     public static class LeaveRequestCreateRequest {
-        private Long employeeId;
-        private Long leaveTypeId;
-        private LocalDate startDate;
-        private LocalDate endDate;
-        private String reason;
+        @NotNull @Positive private Long employeeId;
+        @NotNull @Positive private Long leaveTypeId;
+        @NotNull @FutureOrPresent private LocalDate startDate;
+        @NotNull private LocalDate endDate;
+        @NotBlank @Size(max = 2000) private String reason;
 
         public Long getEmployeeId() {
             return employeeId;

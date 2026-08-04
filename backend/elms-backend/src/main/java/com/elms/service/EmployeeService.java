@@ -38,11 +38,11 @@ public class EmployeeService {
         validateCreateRequest(request);
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new IllegalArgumentException("Email already exists");
+            throw new IllegalStateException("Email already exists");
         }
 
         if (employeeRepository.existsByEmployeeCode(request.getEmployeeCode())) {
-            throw new IllegalArgumentException("Employee code already exists");
+            throw new IllegalStateException("Employee code already exists");
         }
 
         Employee manager = null;
@@ -101,7 +101,7 @@ public class EmployeeService {
 
         if (request.getEmployeeCode() != null && !request.getEmployeeCode().equals(employee.getEmployeeCode())) {
             if (employeeRepository.existsByEmployeeCode(request.getEmployeeCode())) {
-                throw new IllegalArgumentException("Employee code already exists");
+                throw new IllegalStateException("Employee code already exists");
             }
             employee.setEmployeeCode(request.getEmployeeCode());
         }
@@ -172,7 +172,7 @@ public class EmployeeService {
         if (request.getRole() == null) {
             throw new IllegalArgumentException("Role is required");
         }
-        if (request.getRole() != Role.EMPLOYEE && request.getRole() != Role.MANAGER) {
+        if (request.getRole() != Role.EMPLOYEE && request.getRole() != Role.MANAGER && request.getRole() != Role.HR) {
             throw new IllegalArgumentException("Invalid role for employee creation");
         }
         if (request.getEmployeeCode() == null || request.getEmployeeCode().isBlank()) {

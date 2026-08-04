@@ -1,6 +1,7 @@
 package com.elms.service;
 
 import com.elms.entity.Holiday;
+import com.elms.exception.ResourceNotFoundException;
 import com.elms.repository.HolidayRepository;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,7 @@ public class HolidayService {
 
     public Holiday getHolidayById(Long id) {
         return holidayRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Holiday not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Holiday not found"));
     }
 
     public Holiday createHoliday(Holiday holiday) {
@@ -45,7 +46,7 @@ public class HolidayService {
 
     public Holiday updateHoliday(Long id, Holiday updatedHoliday) {
         Holiday existingHoliday = holidayRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Holiday not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Holiday not found"));
 
         validateDuplicateHolidayDate(updatedHoliday.getHolidayDate(), id);
 
@@ -58,7 +59,7 @@ public class HolidayService {
 
     public void deleteHoliday(Long id) {
         Holiday holiday = holidayRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Holiday not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Holiday not found"));
         holidayRepository.delete(holiday);
     }
 

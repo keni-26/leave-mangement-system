@@ -7,6 +7,7 @@ function Login() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -45,11 +46,9 @@ function Login() {
         navigate("/");
       }
     } catch (error) {
-      console.error(error);
-
       if (error.response) {
         setError(
-          error.response.data?.message ||
+          (typeof error.response.data === "string" ? error.response.data : error.response.data?.message) ||
             "Invalid email or password"
         );
       } else {
@@ -65,20 +64,19 @@ function Login() {
   return (
     <div className="login-container">
       <div className="login-card">
-
-        <h1>ELMS</h1>
-
-        <h2>Employee Leave Management System</h2>
-
-        <p>Login to your account</p>
+        <div className="login-brand"><span className="brand-mark">E</span><span>ELMS</span></div>
+        <p className="eyebrow">Employee Leave Management System</p>
+        <h1>Welcome back</h1>
+        <p className="login-copy">Sign in to manage leave requests and team availability.</p>
 
         <form onSubmit={handleLogin}>
 
           <div className="form-group">
-            <label>Email</label>
+            <label htmlFor="email">Work email</label>
 
             <input
               type="email"
+              id="email"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -87,15 +85,15 @@ function Login() {
           </div>
 
           <div className="form-group">
-            <label>Password</label>
-
-            <input
-              type="password"
+            <label htmlFor="password">Password</label>
+            <div className="password-field"><input
+              type={showPassword ? "text" : "password"}
+              id="password"
               placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-            />
+            /><button type="button" className="password-toggle" onClick={() => setShowPassword(!showPassword)}>{showPassword ? "Hide" : "Show"}</button></div>
           </div>
 
           {error && (
@@ -108,7 +106,7 @@ function Login() {
             type="submit"
             disabled={loading}
           >
-            {loading ? "Logging in..." : "Login"}
+            {loading ? "Signing in…" : "Sign in"}
           </button>
 
         </form>

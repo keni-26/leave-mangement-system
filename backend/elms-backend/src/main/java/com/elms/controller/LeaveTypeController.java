@@ -5,6 +5,7 @@ import com.elms.service.LeaveTypeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -42,7 +43,7 @@ public class LeaveTypeController {
     // POST /api/leave-types
     @PostMapping
     public ResponseEntity<LeaveType> createLeaveType(
-            @RequestBody LeaveType leaveType
+            @Valid @RequestBody LeaveType leaveType
     ) {
 
         LeaveType createdLeaveType =
@@ -57,7 +58,7 @@ public class LeaveTypeController {
     @PutMapping("/{id}")
     public ResponseEntity<LeaveType> updateLeaveType(
             @PathVariable Long id,
-            @RequestBody LeaveType leaveType
+            @Valid @RequestBody LeaveType leaveType
     ) {
 
         return ResponseEntity.ok(

@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 import java.util.List;
 
@@ -34,13 +35,13 @@ public class HolidayController {
 
     @PostMapping
     @PreAuthorize("hasRole('HR')")
-    public ResponseEntity<Holiday> createHoliday(@RequestBody Holiday holiday) {
+    public ResponseEntity<Holiday> createHoliday(@Valid @RequestBody Holiday holiday) {
         return ResponseEntity.status(HttpStatus.CREATED).body(holidayService.createHoliday(holiday));
     }
 
     @PutMapping("/{id}")
     @PreAuthorize("hasRole('HR')")
-    public ResponseEntity<Holiday> updateHoliday(@PathVariable Long id, @RequestBody Holiday holiday) {
+    public ResponseEntity<Holiday> updateHoliday(@PathVariable Long id, @Valid @RequestBody Holiday holiday) {
         return ResponseEntity.ok(holidayService.updateHoliday(id, holiday));
     }
 
@@ -51,13 +52,4 @@ public class HolidayController {
         return ResponseEntity.noContent().build();
     }
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<String> handleNotFound(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
-    }
-
-    @ExceptionHandler(IllegalStateException.class)
-    public ResponseEntity<String> handleConflict(IllegalStateException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
-    }
 }

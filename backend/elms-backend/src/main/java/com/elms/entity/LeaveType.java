@@ -1,6 +1,10 @@
 package com.elms.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -13,19 +17,19 @@ public class LeaveType {
     private Long id;
 
     @Column(nullable = false, unique = true, length = 100)
-    private String name;
+    @NotBlank @Size(max = 100) private String name;
 
     @Column(columnDefinition = "TEXT")
     private String description;
 
     @Column(name = "allocated_days", nullable = false, precision = 5, scale = 2)
-    private BigDecimal allocatedDays;
+    @NotNull @PositiveOrZero private BigDecimal allocatedDays;
 
     @Column(name = "approval_required", nullable = false)
-    private Boolean approvalRequired;
+    @NotNull private Boolean approvalRequired;
 
     @Column(nullable = false)
-    private Boolean active;
+    @NotNull private Boolean active;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;

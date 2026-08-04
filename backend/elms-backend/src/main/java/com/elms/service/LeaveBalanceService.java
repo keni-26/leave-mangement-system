@@ -1,6 +1,7 @@
 package com.elms.service;
 
 import com.elms.entity.Employee;
+import com.elms.dto.LeaveBalanceResponse;
 import com.elms.entity.LeaveBalance;
 import com.elms.entity.LeaveType;
 import com.elms.exception.ResourceNotFoundException;
@@ -32,46 +33,46 @@ public class LeaveBalanceService {
         this.leaveTypeRepository = leaveTypeRepository;
     }
 
-    public List<LeaveBalance> getBalancesByEmployee(Long employeeId) {
+    public List<LeaveBalanceResponse> getBalancesByEmployee(Long employeeId) {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + employeeId));
 
-        return leaveBalanceRepository.findByEmployee(employee);
+        return leaveBalanceRepository.findByEmployee(employee).stream().map(this::toResponse).toList();
     }
 
     @Transactional(readOnly = true)
-    public List<LeaveBalance> getBalancesByEmployee(Long employeeId, Authentication authentication) {
+    public List<LeaveBalanceResponse> getBalancesByEmployee(Long employeeId, Authentication authentication) {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + employeeId));
         ensureCanViewEmployeeBalances(employee, authentication);
-        return leaveBalanceRepository.findByEmployee(employee);
+        return leaveBalanceRepository.findByEmployee(employee).stream().map(this::toResponse).toList();
     }
 
-    public LeaveBalance getBalanceByEmployeeAndLeaveType(Long employeeId, Long leaveTypeId) {
+    public LeaveBalanceResponse getBalanceByEmployeeAndLeaveType(Long employeeId, Long leaveTypeId) {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + employeeId));
         LeaveType leaveType = leaveTypeRepository.findById(leaveTypeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Leave type not found with id: " + leaveTypeId));
 
-        return leaveBalanceRepository.findByEmployeeAndLeaveType(employee, leaveType)
+        return toResponse(leaveBalanceRepository.findByEmployeeAndLeaveType(employee, leaveType)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Leave balance not found for employee " + employeeId + " and leave type " + leaveTypeId));
+                        "Leave balance not found for employee " + employeeId + " and leave type " + leaveTypeId)));
     }
 
     @Transactional(readOnly = true)
-    public LeaveBalance getBalanceByEmployeeAndLeaveType(Long employeeId, Long leaveTypeId, Authentication authentication) {
+    public LeaveBalanceResponse getBalanceByEmployeeAndLeaveType(Long employeeId, Long leaveTypeId, Authentication authentication) {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + employeeId));
         ensureCanViewEmployeeBalances(employee, authentication);
         LeaveType leaveType = leaveTypeRepository.findById(leaveTypeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Leave type not found with id: " + leaveTypeId));
-        return leaveBalanceRepository.findByEmployeeAndLeaveType(employee, leaveType)
+        return toResponse(leaveBalanceRepository.findByEmployeeAndLeaveType(employee, leaveType)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Leave balance not found for employee " + employeeId + " and leave type " + leaveTypeId));
+                        "Leave balance not found for employee " + employeeId + " and leave type " + leaveTypeId)));
     }
 
     @Transactional
-    public LeaveBalance createBalance(Long employeeId, Long leaveTypeId) {
+    public LeaveBalanceResponse createBalance(Long employeeId, Long leaveTypeId) {
         Employee employee = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Employee not found with id: " + employeeId));
         LeaveType leaveType = leaveTypeRepository.findById(leaveTypeId)
@@ -82,7 +83,7 @@ public class LeaveBalanceService {
                     "Leave balance already exists for employee " + employeeId + " and leave type " + leaveTypeId);
         }
 
-        return createBalance(employee, leaveType);
+        return toResponse(createBalance(employee, leaveType));
     }
 
     /** Creates missing balances only; existing balance values are never overwritten. */
@@ -136,10 +137,21 @@ public class LeaveBalanceService {
         Employee requestingEmployee = employeeRepository.findByUserEmail(authentication.getName())
                 .orElseThrow(() -> new AccessDeniedException("No employee record is associated with this account"));
         boolean isOwnBalance = requestingEmployee.getId().equals(targetEmployee.getId());
-        boolean managesTarget = targetEmployee.getManager() != null
-                && requestingEmployee.getId().equals(targetEmployee.getManager().getId());
-        if (!isOwnBalance && !managesTarget) {
+        if (!isOwnBalance) {
             throw new AccessDeniedException("You are not authorized to view these leave balances");
         }
+    }
+
+    private LeaveBalanceResponse toResponse(LeaveBalance balance) {
+        LeaveBalanceResponse response = new LeaveBalanceResponse();
+        response.setId(balance.getId());
+        response.setEmployeeId(balance.getEmployee().getId());
+        response.setLeaveTypeId(balance.getLeaveType().getId());
+        response.setLeaveTypeName(balance.getLeaveType().getName());
+        response.setAllocatedDays(balance.getAllocatedDays());
+        response.setUsedDays(balance.getUsedDays());
+        response.setRemainingDays(balance.getRemainingDays());
+        response.setUpdatedAt(balance.getUpdatedAt());
+        return response;
     }
 }
