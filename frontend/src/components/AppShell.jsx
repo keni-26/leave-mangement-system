@@ -4,8 +4,8 @@ import { useNavigate } from "react-router-dom";
 const AUTH_KEYS = ["token", "userId", "employeeId", "email", "role"];
 
 const navigation = {
-  EMPLOYEE: [["Dashboard", "#dashboard", "⌂"], ["Apply leave", "#apply-leave", "＋"], ["My requests", "#requests", "▤"], ["Leave balance", "#balance", "◫"], ["Notifications", "#notifications", "◉"], ["Holidays", "#holidays", "◷"], ["Profile", "#profile", "◌"]],
-  MANAGER: [["Dashboard", "#dashboard", "⌂"], ["Team requests", "#requests", "▤"], ["Notifications", "#notifications", "◉"], ["Profile", "#profile", "◌"]],
+  EMPLOYEE: [["Dashboard", "#dashboard", "⌂"], ["Apply leave", "#apply-leave", "＋"], ["My requests", "#requests", "▤"], ["Leave balance", "#balance", "◫"], ["Holidays", "#holidays", "◷"], ["Profile", "#profile", "◌"]],
+  MANAGER: [["Dashboard", "#dashboard", "⌂"], ["Team requests", "#requests", "▤"], ["Profile", "#profile", "◌"]],
   HR: [["Dashboard", "#dashboard", "⌂"], ["Employees", "#employees", "▤"], ["Leave types", "#leave-types", "◫"], ["Holidays", "#holidays", "◷"], ["Profile", "#profile", "◌"]],
 };
 

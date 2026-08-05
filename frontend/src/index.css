@@ -122,8 +122,8 @@ code {
 .success-message { color: #176b3a; background: #e7f7ed; }
 .error-message { color: #a21c1c; background: #ffeded; }
 .empty-state { padding: 10px 0; }
-.balance-grid, .leave-type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; }
-.balance-card, .leave-type-card, .holiday-list article { padding: 18px; border: 1px solid var(--border); border-radius: 10px; }
+.balance-grid, .leave-type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.balance-card, .leave-type-card, .holiday-list article { padding: 18px; border: 1px solid var(--border); border-radius: 10px;}
 .balance-card dl { margin: 0; }
 .balance-card dl div { display: flex; justify-content: space-between; gap: 12px; padding-top: 7px; }
 .balance-card dt { color: var(--text); }

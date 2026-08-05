@@ -205,10 +205,10 @@ function ManagerDashboard() {
         )}
       </section>
 
-      <section id="notifications" className="dashboard-section">
+      {/*<section id="notifications" className="dashboard-section">
         <div className="section-heading-row"><h2>Notifications</h2><button type="button" className="secondary-button" disabled={!unreadNotifications || updatingId === "notifications-all"} onClick={handleMarkAllAsRead}>{updatingId === "notifications-all" ? "Updating..." : "Mark all as read"}</button></div>
         {notifications.length === 0 ? <p className="empty-state">You have no notifications.</p> : <div className="notification-list">{notifications.map((notification) => <article className={`notification ${notification.isRead ? "read" : "unread"}`} key={notification.id}><div><p>{notification.message}</p><small>{notification.type} · {formatDate(notification.createdAt)}</small></div>{!notification.isRead && <button type="button" className="secondary-button" disabled={updatingId === `notification-${notification.id}`} onClick={() => handleMarkAsRead(notification.id)}>{updatingId === `notification-${notification.id}` ? "Updating..." : "Mark as read"}</button>}</article>)}</div>}
-      </section>
+      </section>*/}
 
       {showProfile && <section id="profile" className="dashboard-section profile-panel"><h2>Profile</h2><dl><div><dt>Email</dt><dd>{email || "-"}</dd></div><div><dt>Role</dt><dd>MANAGER</dd></div></dl></section>}
       {rejectingRequest && <div className="modal-backdrop" role="presentation"><section className="reject-modal" role="dialog" aria-modal="true" aria-labelledby="reject-title"><h2 id="reject-title">Reject Leave Request</h2><p>Provide a reason for rejecting {rejectingRequest.employeeName || "this employee"}'s request.</p><form onSubmit={handleReject}><label>Rejection reason<textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} rows="4" required autoFocus /></label>{rejectionError && <p className="error-message" role="alert">{rejectionError}</p>}<div className="modal-actions"><button type="button" className="secondary-button" disabled={updatingId === `leave-${rejectingRequest.id}`} onClick={() => setRejectingRequest(null)}>Cancel</button><button type="submit" className="danger-button" disabled={updatingId === `leave-${rejectingRequest.id}`}>{updatingId === `leave-${rejectingRequest.id}` ? "Rejecting..." : "Reject request"}</button></div></form></section></div>}

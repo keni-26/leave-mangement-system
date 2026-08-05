@@ -66,9 +66,7 @@ function Login() {
       <div className="login-card">
         <div className="login-brand"><span className="brand-mark">E</span><span>ELMS</span></div>
         <p className="eyebrow">Employee Leave Management System</p>
-        <h1>Welcome back</h1>
-        <p className="login-copy">Sign in to manage leave requests and team availability.</p>
-
+        <h1>Welcome</h1>
         <form onSubmit={handleLogin}>
 
           <div className="form-group">
