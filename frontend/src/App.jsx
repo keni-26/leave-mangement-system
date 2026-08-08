@@ -4,6 +4,7 @@ import Login from "./pages/Login";
 import EmployeeDashboard from "./pages/EmployeeDashboard";
 import ManagerDashboard from "./pages/ManagerDashboard";
 import HRDashboard from "./pages/HRDashboard";
+import LeaveManagement from "./pages/LeaveManagement";
 import AppShell from "./components/AppShell";
 
 function RoleRoute({ role, children }) {
@@ -34,6 +35,11 @@ function App() {
         <Route
           path="/hr"
           element={<RoleRoute role="HR"><HRDashboard /></RoleRoute>}
+        />
+
+        <Route
+          path="/hr/leave-management"
+          element={<RoleRoute role="HR"><LeaveManagement /></RoleRoute>}
         />
 
         <Route

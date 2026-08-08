@@ -11,6 +11,8 @@ public class LeaveRequestResponse {
     private Long employeeId;
     private String employeeName;
     private String employeeCode;
+    private String employeeEmail;
+    private String managerName;
     private Long leaveTypeId;
     private String leaveTypeName;
     private LocalDate startDate;
@@ -22,10 +24,13 @@ public class LeaveRequestResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime reviewedAt;
+    private String reviewedBy;
     public Long getId() { return id; } public void setId(Long id) { this.id = id; }
     public Long getEmployeeId() { return employeeId; } public void setEmployeeId(Long employeeId) { this.employeeId = employeeId; }
     public String getEmployeeName() { return employeeName; } public void setEmployeeName(String employeeName) { this.employeeName = employeeName; }
     public String getEmployeeCode() { return employeeCode; } public void setEmployeeCode(String employeeCode) { this.employeeCode = employeeCode; }
+    public String getEmployeeEmail() { return employeeEmail; } public void setEmployeeEmail(String employeeEmail) { this.employeeEmail = employeeEmail; }
+    public String getManagerName() { return managerName; } public void setManagerName(String managerName) { this.managerName = managerName; }
     public Long getLeaveTypeId() { return leaveTypeId; } public void setLeaveTypeId(Long leaveTypeId) { this.leaveTypeId = leaveTypeId; }
     public String getLeaveTypeName() { return leaveTypeName; } public void setLeaveTypeName(String leaveTypeName) { this.leaveTypeName = leaveTypeName; }
     public LocalDate getStartDate() { return startDate; } public void setStartDate(LocalDate startDate) { this.startDate = startDate; }
@@ -37,4 +42,5 @@ public class LeaveRequestResponse {
     public LocalDateTime getCreatedAt() { return createdAt; } public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; } public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public LocalDateTime getReviewedAt() { return reviewedAt; } public void setReviewedAt(LocalDateTime reviewedAt) { this.reviewedAt = reviewedAt; }
+    public String getReviewedBy() { return reviewedBy; } public void setReviewedBy(String reviewedBy) { this.reviewedBy = reviewedBy; }
 }

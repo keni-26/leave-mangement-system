@@ -74,6 +74,12 @@ public class LeaveRequestController {
         );
     }
 
+    @GetMapping
+    @PreAuthorize("hasRole('HR')")
+    public ResponseEntity<List<LeaveRequestResponse>> getAllLeaveRequests(Authentication authentication) {
+        return ResponseEntity.ok(leaveRequestService.getAllLeaveRequests(authentication.getName()));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<LeaveRequestResponse> getLeaveRequestById(@PathVariable Long id, Authentication authentication) {
         return ResponseEntity.ok(leaveRequestService.getLeaveRequestById(id, authentication.getName()));

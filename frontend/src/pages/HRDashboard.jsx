@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import api from "../services/api";
 
 const AUTH_STORAGE_KEYS = ["token", "userId", "employeeId", "email", "role"];
@@ -21,8 +21,10 @@ function formatDate(value) {
 
 function HRDashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
   const email = localStorage.getItem("email");
-  const [activeTab, setActiveTab] = useState("employees");
+  const requestedSection = location.state?.hrSection;
+  const [activeTab, setActiveTab] = useState(() => ["employees", "leave-types", "holidays"].includes(requestedSection) ? requestedSection : "employees");
   const [employees, setEmployees] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
   const [holidays, setHolidays] = useState([]);
@@ -66,13 +68,14 @@ function HRDashboard() {
   useEffect(() => { loadData(); }, [loadData]);
 
   useEffect(() => {
-    const navigateToSection = (event) => {
-      const tab = { "#employees": "employees", "#leave-types": "leave-types", "#holidays": "holidays" }[event.detail];
-      if (tab) setActiveTab(tab);
-    };
-    window.addEventListener("elms:navigate", navigateToSection);
-    return () => window.removeEventListener("elms:navigate", navigateToSection);
-  }, []);
+    if (loading || !requestedSection || requestedSection === "profile") return undefined;
+    const tab = ["employees", "leave-types", "holidays"].includes(requestedSection) ? requestedSection : "employees";
+    const timer = window.setTimeout(() => {
+      setActiveTab(tab);
+      window.requestAnimationFrame(() => document.getElementById(requestedSection)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [loading, requestedSection]);
 
   const resetEmployeeForm = () => { setEmployeeForm(EMPTY_EMPLOYEE); setEmployeeEditingId(null); };
   const resetLeaveTypeForm = () => { setLeaveTypeForm(EMPTY_LEAVE_TYPE); setLeaveTypeEditingId(null); };

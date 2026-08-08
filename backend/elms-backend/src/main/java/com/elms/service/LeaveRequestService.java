@@ -94,6 +94,15 @@ public class LeaveRequestService {
         return leaveRequestRepository.findByEmployeeManagerIdOrderByCreatedAtDesc(managerId).stream().map(this::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<LeaveRequestResponse> getAllLeaveRequests(String authenticatedEmail) {
+        User authenticatedUser = getAuthenticatedUser(authenticatedEmail);
+        if (authenticatedUser.getRole() != Role.HR) {
+            throw new AccessDeniedException("Only HR can view all leave requests");
+        }
+        return leaveRequestRepository.findAllByOrderByCreatedAtDesc().stream().map(this::toResponse).toList();
+    }
+
     @Transactional
     public LeaveRequestResponse createLeaveRequest(LeaveRequest leaveRequest, String authenticatedEmail) {
         validateRequest(leaveRequest);
@@ -415,6 +424,8 @@ public class LeaveRequestService {
         response.setEmployeeId(request.getEmployee().getId());
         response.setEmployeeName(request.getEmployee().getName());
         response.setEmployeeCode(request.getEmployee().getEmployeeCode());
+        response.setEmployeeEmail(request.getEmployee().getUser().getEmail());
+        response.setManagerName(request.getEmployee().getManager() == null ? null : request.getEmployee().getManager().getName());
         response.setLeaveTypeId(request.getLeaveType().getId());
         response.setLeaveTypeName(request.getLeaveType().getName());
         response.setStartDate(request.getStartDate());
@@ -426,6 +437,9 @@ public class LeaveRequestService {
         response.setCreatedAt(request.getCreatedAt());
         response.setUpdatedAt(request.getUpdatedAt());
         response.setReviewedAt(request.getReviewedAt());
+        response.setReviewedBy(request.getReviewedBy() == null ? null : employeeRepository.findByUserId(request.getReviewedBy().getId())
+                .map(Employee::getName)
+                .orElse(request.getReviewedBy().getEmail()));
         return response;
     }
 }
