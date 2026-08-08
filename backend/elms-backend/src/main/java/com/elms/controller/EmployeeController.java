@@ -3,7 +3,6 @@ package com.elms.controller;
 import com.elms.dto.EmployeeCreateRequest;
 import com.elms.dto.EmployeeResponse;
 import com.elms.dto.EmployeeUpdateRequest;
-import com.elms.exception.ResourceNotFoundException;
 import com.elms.service.EmployeeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
